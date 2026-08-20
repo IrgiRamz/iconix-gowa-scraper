@@ -33,7 +33,7 @@ class GoWaApiService
     }
 
     /**
-     * HTTP client untuk request GET (tanpa body).
+     * HTTP client untuk request GET.
      * Hanya Accept header, TANPA Content-Type.
      *
      * @return \Illuminate\Http\Client\PendingRequest
@@ -52,11 +52,12 @@ class GoWaApiService
     }
 
     /**
-     * HTTP client untuk request POST (dengan body JSON).
+     * HTTP client untuk request POST JSON-only (tanpa file upload).
+     * Content-Type: application/json.
      *
      * @return \Illuminate\Http\Client\PendingRequest
      */
-    private function clientPost()
+    private function clientJson()
     {
         $client = Http::timeout($this->timeout)
             ->connectTimeout($this->connectTimeout)
@@ -64,6 +65,29 @@ class GoWaApiService
             ->withHeaders([
                 'Content-Type' => 'application/json',
             ]);
+
+        if (! empty($this->user)) {
+            $client = $client->withBasicAuth($this->user, $this->pass);
+        }
+
+        return $client;
+    }
+
+    /**
+     * HTTP client untuk request multipart (file upload / URL forwarding).
+     * JANGAN set Content-Type manual — biarkan Laravel/Guzzle auto-detect.
+     * Saat body mengandung array/string untuk form fields, Laravel auto-detect
+     * sebagai multipart dan set boundary yang benar.
+     *
+     * @return \Illuminate\Http\Client\PendingRequest
+     */
+    private function clientMultipart()
+    {
+        $client = Http::timeout($this->timeout)
+            ->connectTimeout($this->connectTimeout)
+            ->acceptJson();
+            // TIDAK ada withHeaders('Content-Type') di sini
+            // Laravel/Guzzle auto-detect: array -> multipart/form-data
 
         if (! empty($this->user)) {
             $client = $client->withBasicAuth($this->user, $this->pass);
@@ -83,7 +107,7 @@ class GoWaApiService
      *     "id": "...",
      *     "display_name": "...",
      *     "state": "logged_in" | "disconnected",
-     *     "jid": "628xxx@s.whatsapp.net",  <-- hanya ada jika logged_in
+     *     "jid": "628xxx@s.whatsapp.net",
      *     "created_at": "..."
      *   }
      * }
@@ -104,7 +128,6 @@ class GoWaApiService
 
             Log::info("[GoWaApiService] Raw response: " . json_encode($rawBody));
 
-            // Jika bukan 2xx
             if (! $response->successful()) {
                 $message = $rawBody['message'] ?? 'Unknown error';
 
@@ -129,11 +152,10 @@ class GoWaApiService
                 ];
             }
 
-            // 200 OK — ekstrak 'results' dari GoWA response
             $results = $rawBody['results'] ?? null;
             $state = $results['state'] ?? 'disconnected';
 
-            Log::info("[GoWaApiService] Device {$deviceId} state: {$state}, results: " . json_encode($results));
+            Log::info("[GoWaApiService] Device {$deviceId} state: {$state}");
 
             return [
                 'results' => $results,
@@ -156,20 +178,6 @@ class GoWaApiService
 
     /**
      * Get QR code link dari GoWA (login endpoint).
-     *
-     * GoWA response format:
-     * {
-     *   "code": "SUCCESS",
-     *   "message": "Login success",
-     *   "results": {
-     *     "device_id": "...",
-     *     "qr_duration": 30,
-     *     "qr_link": "http://..."
-     *   }
-     * }
-     *
-     * Jika sudah logged in:
-     * { "code": "ALREADY_LOGGED_IN", "message": "you are already logged in." }
      *
      * @param  string  $deviceId
      * @return array{qr_link: string|null, error: string|null, httpStatus: int, rawBody: array|null}
@@ -206,7 +214,6 @@ class GoWaApiService
                 ];
             }
 
-            // Sudah logged in
             if (($rawBody['code'] ?? '') === 'ALREADY_LOGGED_IN') {
                 return [
                     'qr_link' => null,
@@ -218,7 +225,7 @@ class GoWaApiService
 
             $qrLink = $rawBody['results']['qr_link'] ?? null;
 
-            Log::info("[GoWaApiService] QR link for {$deviceId}: " . ($qrLink ?? 'null'));
+            Log::info("[GoWaApiService] QR link for {$deviceId}: " . ($qrLink ? '(present)' : 'null'));
 
             return [
                 'qr_link' => $qrLink,
@@ -252,7 +259,7 @@ class GoWaApiService
         Log::info("[GoWaApiService] POST {$url}");
 
         try {
-            $response = $this->clientPost()->post($url);
+            $response = $this->clientJson()->post($url);
 
             if ($response->successful()) {
                 Log::info("[GoWaApiService] Reconnect success for {$deviceId}");
@@ -305,6 +312,7 @@ class GoWaApiService
 
     /**
      * Kirim pesan text ke GoWA.
+     * Gunakan JSON body.
      *
      * @param  string  $deviceId
      * @param  string  $phone   Format: 628xxxx@s.whatsapp.net
@@ -319,7 +327,7 @@ class GoWaApiService
         Log::info("[GoWaApiService] POST {$url} device={$deviceId} phone={$phone}");
 
         try {
-            $response = $this->clientPost()
+            $response = $this->clientJson()
                 ->withHeaders([
                     'X-Device-Id' => $deviceId,
                 ])
@@ -347,7 +355,7 @@ class GoWaApiService
             $body = $response->json();
             $message = $body['message'] ?? 'Unknown error';
 
-            Log::warning("[GoWaApiService] Send failed: {$message}");
+            Log::warning("[GoWaApiService] Send message failed: HTTP {$response->status()} - {$message}");
 
             return [
                 'message_id' => null,
@@ -369,56 +377,76 @@ class GoWaApiService
     /**
      * Kirim gambar via GoWA.
      *
+     * Whacenter forward: parameter 'file' berisi URL string.
+     * GoWA menerima: 'image_url' sebagai form field string.
+     *
+     * Gunakan clientMultipart() — tidak set Content-Type manual.
+     * Laravel auto-detect body sebagai multipart/form-data.
+     *
      * @param  string  $deviceId
      * @param  string  $phone
-     * @param  string|null  $imageUrl
+     * @param  string|null  $imageUrl   URL gambar dari Whacenter
      * @param  string|null  $caption
      * @param  array   $options
      * @return array{message_id: string|null, error: string|null, httpStatus: int}
      */
     public function sendImage(string $deviceId, string $phone, ?string $imageUrl = null, ?string $caption = null, array $options = []): array
     {
+        $url = "{$this->baseUrl}/send/image";
+
+        Log::info("[GoWaApiService] POST {$url} device={$deviceId} phone={$phone} imageUrl={$imageUrl}");
+
         try {
-            $body = [
+            // Bangun body multipart
+            $parts = array_filter([
                 'phone' => $phone,
                 'caption' => $caption,
-            ];
-
-            if (! empty($imageUrl)) {
-                $body['image_url'] = $imageUrl;
-            }
-
-            $body = array_merge($body, array_filter([
+                'image_url' => $imageUrl,
                 'reply_message_id' => $options['reply_message_id'] ?? null,
                 'view_once' => $options['view_once'] ?? null,
                 'compress' => $options['compress'] ?? null,
                 'duration' => $options['duration'] ?? null,
                 'is_forwarded' => $options['is_forwarded'] ?? null,
-            ], fn ($v) => $v !== null));
+            ], fn ($v) => $v !== null);
 
-            $response = $this->clientPost()
+            Log::info("[GoWaApiService] sendImage body keys: " . implode(', ', array_keys($parts)));
+
+            $response = $this->clientMultipart()
                 ->withHeaders([
                     'X-Device-Id' => $deviceId,
                 ])
                 ->timeout(60)
-                ->post("{$this->baseUrl}/send/image", $body);
+                ->post($url, $parts);
 
-            if ($response->successful()) {
-                $result = $response->json();
+            $statusCode = $response->status();
+
+            Log::info("[GoWaApiService] sendImage HTTP {$statusCode}");
+
+            if (! $response->successful()) {
+                $body = $response->json();
+                $errorMsg = $body['message'] ?? "HTTP {$statusCode}";
+
+                Log::error("[GoWaApiService] sendImage FAILED: HTTP {$statusCode} - " . json_encode($body));
 
                 return [
-                    'message_id' => $result['results']['message_id'] ?? null,
-                    'error' => null,
-                    'httpStatus' => $response->status(),
+                    'message_id' => null,
+                    'error' => $errorMsg,
+                    'httpStatus' => $statusCode,
                 ];
             }
 
+            $body = $response->json();
+
+            Log::info("[GoWaApiService] sendImage SUCCESS: " . json_encode($body));
+
             return [
-                'message_id' => null,
-                'error' => $this->extractErrorMessage($response),
-                'httpStatus' => $response->status(),
+                'message_id' => $body['results']['message_id'] ?? null,
+                'error' => null,
+                'httpStatus' => $statusCode,
             ];
         } catch (RequestException $e) {
+            Log::error("[GoWaApiService] sendImage connection exception: " . $e->getMessage());
+
             return [
                 'message_id' => null,
                 'error' => 'connection_error',
@@ -431,6 +459,9 @@ class GoWaApiService
     /**
      * Kirim file/dokumen via GoWA.
      *
+     * Whacenter forward: parameter 'file' berisi URL string.
+     * GoWA menerima: 'file_url' sebagai form field string.
+     *
      * @param  string  $deviceId
      * @param  string  $phone
      * @param  string|null  $fileUrl
@@ -440,45 +471,58 @@ class GoWaApiService
      */
     public function sendFile(string $deviceId, string $phone, ?string $fileUrl = null, ?string $caption = null, array $options = []): array
     {
+        $url = "{$this->baseUrl}/send/file";
+
+        Log::info("[GoWaApiService] POST {$url} device={$deviceId} phone={$phone} fileUrl={$fileUrl}");
+
         try {
-            $body = [
+            $parts = array_filter([
                 'phone' => $phone,
                 'caption' => $caption,
-            ];
-
-            if (! empty($fileUrl)) {
-                $body['file_url'] = $fileUrl;
-            }
-
-            $body = array_merge($body, array_filter([
+                'file_url' => $fileUrl,
                 'reply_message_id' => $options['reply_message_id'] ?? null,
                 'duration' => $options['duration'] ?? null,
                 'is_forwarded' => $options['is_forwarded'] ?? null,
-            ], fn ($v) => $v !== null));
+            ], fn ($v) => $v !== null);
 
-            $response = $this->clientPost()
+            Log::info("[GoWaApiService] sendFile body keys: " . implode(', ', array_keys($parts)));
+
+            $response = $this->clientMultipart()
                 ->withHeaders([
                     'X-Device-Id' => $deviceId,
                 ])
                 ->timeout(60)
-                ->post("{$this->baseUrl}/send/file", $body);
+                ->post($url, $parts);
 
-            if ($response->successful()) {
-                $result = $response->json();
+            $statusCode = $response->status();
+
+            Log::info("[GoWaApiService] sendFile HTTP {$statusCode}");
+
+            if (! $response->successful()) {
+                $body = $response->json();
+                $errorMsg = $body['message'] ?? "HTTP {$statusCode}";
+
+                Log::error("[GoWaApiService] sendFile FAILED: HTTP {$statusCode} - " . json_encode($body));
 
                 return [
-                    'message_id' => $result['results']['message_id'] ?? null,
-                    'error' => null,
-                    'httpStatus' => $response->status(),
+                    'message_id' => null,
+                    'error' => $errorMsg,
+                    'httpStatus' => $statusCode,
                 ];
             }
 
+            $body = $response->json();
+
+            Log::info("[GoWaApiService] sendFile SUCCESS: " . json_encode($body));
+
             return [
-                'message_id' => null,
-                'error' => $this->extractErrorMessage($response),
-                'httpStatus' => $response->status(),
+                'message_id' => $body['results']['message_id'] ?? null,
+                'error' => null,
+                'httpStatus' => $statusCode,
             ];
         } catch (RequestException $e) {
+            Log::error("[GoWaApiService] sendFile connection exception: " . $e->getMessage());
+
             return [
                 'message_id' => null,
                 'error' => 'connection_error',
