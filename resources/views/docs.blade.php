@@ -1,5 +1,6 @@
 <!doctype html>
 <html lang="id">
+
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -16,6 +17,7 @@
         }
     </style>
 </head>
+
 <body>
     <script id="api-reference" type="application/json">
     {
@@ -290,6 +292,109 @@
                     }
                 }
             },
+            "/createDevice": {
+                "post": {
+                    "tags": ["Device Management"],
+                    "summary": "Create / Register Device Session",
+                    "description": "Mendaftarkan slot/session device WhatsApp baru di server GoWA.",
+                    "operationId": "createDevicePost",
+                    "requestBody": {
+                        "required": false,
+                        "content": {
+                            "application/x-www-form-urlencoded": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "device_id": { "type": "string", "example": "xxxx", "description": "ID Device kustom (opsional)" },
+                                        "token": { "type": "string", "example": "xxxx", "description": "Token" }
+                                    }
+                                }
+                            },
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "device_id": { "type": "string", "example": "xxxx", "description": "ID Device kustom (opsional)" },
+                                        "token": { "type": "string", "example": "xxxx", "description": "Token" }
+                                    }
+                                },
+                                "example": {
+                                    "device_id": "xxxx",
+                                    "token": "xxxx"
+                                }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": {
+                            "description": "Response Pembuatan Device",
+                            "content": {
+                                "application/json": {
+                                    "examples": {
+                                        "Success": {
+                                            "summary": "Device Berhasil Dibuat",
+                                            "value": {
+                                                "status": true,
+                                                "message": "device created successfully",
+                                                "data": {
+                                                    "device_id": "xxxx",
+                                                    "display_name": "",
+                                                    "state": "disconnected"
+                                                }
+                                            }
+                                        },
+                                        "Error": {
+                                            "summary": "Gagal Pembuatan / Error",
+                                            "value": {
+                                                "status": false,
+                                                "message": "device creation failed",
+                                                "data": []
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "/deleteDevice": {
+                "delete": {
+                    "tags": ["Device Management"],
+                    "summary": "Delete Device Session",
+                    "description": "Menghapus session device menggunakan HTTP DELETE.",
+                    "operationId": "deleteDeviceDelete",
+                    "parameters": [
+                        {
+                            "name": "device_id",
+                            "in": "query",
+                            "required": true,
+                            "schema": { "type": "string", "example": "xxxx" }
+                        },
+                        {
+                            "name": "token",
+                            "in": "query",
+                            "required": true,
+                            "schema": { "type": "string", "example": "xxxx" }
+                        }
+                    ],
+                    "responses": {
+                        "200": {
+                            "description": "Response Penghapusan Device",
+                            "content": {
+                                "application/json": {
+                                    "example": {
+                                        "status": true,
+                                        "message": "device deleted successfully",
+                                        "data": []
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+
             "/send": {
                 "post": {
                     "tags": ["Message Sending"],
@@ -454,4 +559,5 @@
     </script>
     <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
 </body>
+
 </html>

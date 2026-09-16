@@ -327,4 +327,95 @@ class DeviceController extends Controller
 
         return QrFallbackGenerator::generate();
     }
+
+    /**
+     * POST/GET /api/createDevice
+     *
+     * Mendaftarkan/membuat session device baru di GoWA.
+     */
+    public function createDevice(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $deviceId = trim($request->input('device_id') ?? '');
+
+        $token = $request->input('token');
+
+        if ($token !== '1c0n1x@S3cur3!') {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        Log::info("[DeviceController] createDevice called with device_id={$deviceId}");
+
+        $result = $this->gowa->createDevice($deviceId ?: null);
+
+        if ($result['error']) {
+            Log::warning("[DeviceController] createDevice error: " . $result['error']);
+
+            return response()->json([
+                'status' => false,
+                'message' => $result['error'] === 'connection_error'
+                    ? 'connection error to gowa server'
+                    : $result['error'],
+                'data' => [],
+            ], 200);
+        }
+
+        $results = $result['results'] ?? [];
+
+        return response()->json([
+            'status' => true,
+            'message' => 'device created successfully',
+            'data' => [
+                'device_id' => $results['id'] ?? $deviceId,
+                'display_name' => $results['display_name'] ?? '',
+                'state' => $results['state'] ?? 'disconnected',
+            ],
+        ], 200);
+    }
+
+    /**
+     * POST/DELETE/GET /api/deleteDevice
+     *
+     * Menghapus/logout session device dari GoWA.
+     */
+    public function deleteDevice(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $deviceId = trim($request->input('device_id') ?? '');
+
+        $token = $request->input('token');
+
+        if ($token !== '1c0n1x@S3cur3!') {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        if (empty($deviceId)) {
+            Log::warning("[DeviceController] deleteDevice missing device_id");
+
+            return response()->json([
+                'status' => false,
+                'message' => 'device not connected or not found',
+                'data' => [],
+            ], 200);
+        }
+
+        Log::info("[DeviceController] deleteDevice called with device_id={$deviceId}");
+
+        $result = $this->gowa->deleteDevice($deviceId);
+
+        if (!$result['success']) {
+            Log::warning("[DeviceController] deleteDevice error: " . ($result['error'] ?? 'failed'));
+
+            return response()->json([
+                'status' => false,
+                'message' => 'device not connected or not found',
+                'data' => [],
+            ], 200);
+        }
+
+        return response()->json([
+            'status' => true,
+            'message' => 'device deleted successfully',
+            'data' => [],
+        ], 200);
+    }
 }
+

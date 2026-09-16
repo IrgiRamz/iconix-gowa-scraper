@@ -34,6 +34,13 @@ Route::match(['get', 'post'], '/relogDevice', [DeviceController::class, 'relogDe
 // GET /api/qr
 Route::get('/qr', [DeviceController::class, 'qr']);
 
+// GET/POST /api/createDevice
+Route::match(['post'], '/createDevice', [DeviceController::class, 'createDevice']);
+
+// GET/POST/DELETE /api/deleteDevice
+Route::match(['delete'], '/deleteDevice', [DeviceController::class, 'deleteDevice']);
+
+
 /*
 |--------------------------------------------------------------------------
 | Message Sending Endpoints

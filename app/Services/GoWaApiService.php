@@ -588,4 +588,119 @@ class GoWaApiService
             || str_contains(strtolower($error), 'disconnected')
             || str_contains(strtolower($error), 'not connected');
     }
+
+    /**
+     * Pendaftaran / pembuatan session device baru di GoWA.
+     *
+     * Endpoint GoWA: POST /devices
+     * Body: { "device_id": "xxx" }
+     *
+     * @param  string|null  $deviceId
+     * @return array{results: array|null, error: string|null, httpStatus: int, rawBody: array|null}
+     */
+    public function createDevice(?string $deviceId = null): array
+    {
+        $url = "{$this->baseUrl}/devices";
+
+        Log::info("[GoWaApiService] POST {$url} with device_id=" . ($deviceId ?? 'auto'));
+
+        try {
+            $payload = array_filter([
+                'device_id' => $deviceId,
+            ], fn ($v) => $v !== null && $v !== '');
+
+            $response = $this->clientJson()->post($url, $payload);
+            $rawBody = $response->json();
+
+            Log::info("[GoWaApiService] Create device raw response: " . json_encode($rawBody));
+
+            if (! $response->successful()) {
+                $message = $rawBody['message'] ?? 'Device creation failed';
+
+                return [
+                    'results' => null,
+                    'error' => $message,
+                    'httpStatus' => $response->status(),
+                    'rawBody' => $rawBody,
+                ];
+            }
+
+            return [
+                'results' => $rawBody['results'] ?? null,
+                'error' => null,
+                'httpStatus' => $response->status(),
+                'rawBody' => $rawBody,
+            ];
+        } catch (RequestException $e) {
+            Log::error("[GoWaApiService] Connection error create device: " . $e->getMessage());
+
+            return [
+                'results' => null,
+                'error' => 'connection_error',
+                'httpStatus' => 0,
+                'exception' => $e->getMessage(),
+                'rawBody' => null,
+            ];
+        }
+    }
+
+    /**
+     * Penghapusan / logout session device dari GoWA server.
+     *
+     * Endpoint GoWA: DELETE /devices/{device_id}
+     *
+     * @param  string  $deviceId
+     * @return array{success: bool, error: string|null, httpStatus: int, rawBody: array|null}
+     */
+    public function deleteDevice(string $deviceId): array
+    {
+        $url = "{$this->baseUrl}/devices/{$deviceId}";
+
+        Log::info("[GoWaApiService] DELETE {$url}");
+
+        try {
+            $response = $this->clientGet()->delete($url);
+            $rawBody = $response->json();
+
+            Log::info("[GoWaApiService] Delete device raw response: " . json_encode($rawBody));
+
+            if (! $response->successful()) {
+                $message = $rawBody['message'] ?? 'Device deletion failed';
+
+                if (str_contains(strtolower($message), 'not found')) {
+                    return [
+                        'success' => false,
+                        'error' => 'not_found',
+                        'httpStatus' => $response->status(),
+                        'rawBody' => $rawBody,
+                    ];
+                }
+
+                return [
+                    'success' => false,
+                    'error' => $message,
+                    'httpStatus' => $response->status(),
+                    'rawBody' => $rawBody,
+                ];
+            }
+
+            return [
+                'success' => true,
+                'error' => null,
+                'httpStatus' => $response->status(),
+                'rawBody' => $rawBody,
+            ];
+        } catch (RequestException $e) {
+            Log::error("[GoWaApiService] Connection error delete device {$deviceId}: " . $e->getMessage());
+
+            return [
+                'success' => false,
+                'error' => 'connection_error',
+                'httpStatus' => 0,
+                'exception' => $e->getMessage(),
+                'rawBody' => null,
+            ];
+        }
+    }
 }
+
