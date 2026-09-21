@@ -141,6 +141,16 @@ Route::get('/widget-stats.js', function () {
                     flex-direction: column;
                     justify-content: center;
                 }
+                /* CSS UNTUK JUDUL SERVER */
+                .gowa-main-title {
+                    font-size: 15px;
+                    font-weight: 900;
+                    color: #111827;
+                    margin-bottom: 15px;
+                    padding-bottom: 8px;
+                    border-bottom: 1px dashed #d1d5db;
+                    text-align: center;
+                }
                 .gowa-title { font-size: 13px; font-weight: bold; color: #4b5563; margin-bottom: 5px; display: flex; justify-content: space-between; }
                 .gowa-bar-bg { background: #e5e7eb; border-radius: 99px; height: 10px; width: 100%; margin-bottom: 12px; overflow: hidden; }
                 .gowa-bar-bg:last-child { margin-bottom: 0; } /* Hilangkan margin bawah dari bar terakhir */
@@ -156,6 +166,9 @@ Route::get('/widget-stats.js', function () {
             // Render HTML ke dalam target Div
             targetDiv.innerHTML = `
                 <div class=\"gowa-box\">
+                    <div class=\"gowa-main-title\">
+                        Server ICX-WA
+                    </div>
                     <div class=\"gowa-title\">
                         <span>Storage</span>
                         <span>{$diskText} ({$diskPct}%)</span>
@@ -165,7 +178,7 @@ Route::get('/widget-stats.js', function () {
                     </div>
 
                     <div class=\"gowa-title\">
-                        <span>RAM Usage</span>
+                        <span>RAM</span>
                         <span>{$ramText} ({$ramPct}%)</span>
                     </div>
                     <div class=\"gowa-bar-bg\">
