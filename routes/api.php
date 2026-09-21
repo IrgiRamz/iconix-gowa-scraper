@@ -76,10 +76,27 @@ Route::get('/widget-stats.js', function () {
     $diskPct = round(($diskUsed / $diskTotal) * 100);
     $diskText = round($diskUsed / 1073741824, 2) . ' GB / ' . round($diskTotal / 1073741824, 2) . ' GB';
 
-    // 2. Baca RAM
+    // 2. Baca RAM (Saya sarankan pakai cara proc/meminfo ini agar tidak N/A di VPS Linux)
     $ramText = 'N/A';
     $ramPct = 0;
-    if (function_exists('shell_exec')) {
+
+    if (is_readable('/proc/meminfo')) {
+        $meminfo = file_get_contents('/proc/meminfo');
+        preg_match('/MemTotal:\s+(\d+)/', $meminfo, $totalMatches);
+        preg_match('/MemAvailable:\s+(\d+)/', $meminfo, $availableMatches);
+        preg_match('/MemFree:\s+(\d+)/', $meminfo, $freeMatches);
+
+        if (isset($totalMatches[1])) {
+            $totalKb = (int) $totalMatches[1];
+            $freeKb = isset($availableMatches[1]) ? (int) $availableMatches[1] : (int) ($freeMatches[1] ?? 0);
+            $usedKb = $totalKb - $freeKb;
+
+            if ($totalKb > 0) {
+                $ramPct = round(($usedKb / $totalKb) * 100);
+                $ramText = round($usedKb / 1024 / 1024, 2) . ' GB / ' . round($totalKb / 1024 / 1024, 2) . ' GB';
+            }
+        }
+    } elseif (function_exists('shell_exec')) {
         $free = shell_exec('free -m');
         if ($free) {
             $lines = explode("\n", trim($free));
@@ -104,15 +121,34 @@ Route::get('/widget-stats.js', function () {
                 return;
             }
 
-            // Inject CSS untuk mempercantik chart/bar
+            // Inject CSS yang sudah disesuaikan agar widget sejajar dan stretch
             var css = `
-                .gowa-box { font-family: sans-serif; background: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); max-width: 350px; }
+                /* Paksa div utama untuk stretch mengikuti tinggi kolom Bootstrap */
+                #gowa-server-stats { display: flex; width: 100%; }
+                
+                /* Set flexbox ke gowa-box agar isinya selalu ke tengah */
+                .gowa-box { 
+                    font-family: sans-serif; 
+                    background: #fff; 
+                    padding: 15px; 
+                    border-radius: 8px; 
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.1); 
+                    min-width: 250px;
+                    max-width: 350px; 
+                    width: 100%;
+                    /* CSS Baru untuk menyamakan tinggi */
+                    display: flex;
+                    flex-direction: column;
+                    justify-content: center;
+                }
                 .gowa-title { font-size: 13px; font-weight: bold; color: #4b5563; margin-bottom: 5px; display: flex; justify-content: space-between; }
                 .gowa-bar-bg { background: #e5e7eb; border-radius: 99px; height: 10px; width: 100%; margin-bottom: 12px; overflow: hidden; }
+                .gowa-bar-bg:last-child { margin-bottom: 0; } /* Hilangkan margin bawah dari bar terakhir */
                 .gowa-bar-fill { height: 100%; border-radius: 99px; transition: width 0.8s ease; }
                 .gowa-disk-fill { background: #3b82f6; width: {$diskPct}%; } /* Warna Biru */
                 .gowa-ram-fill { background: #10b981; width: {$ramPct}%; } /* Warna Hijau */
             `;
+            
             var style = document.createElement('style');
             style.innerHTML = css;
             document.head.appendChild(style);
