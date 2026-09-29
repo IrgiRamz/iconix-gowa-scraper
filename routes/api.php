@@ -40,6 +40,13 @@ Route::match(['post'], '/createDevice', [DeviceController::class, 'createDevice'
 // GET/POST/DELETE /api/deleteDevice
 Route::match(['delete'], '/deleteDevice', [DeviceController::class, 'deleteDevice']);
 
+// GET/POST /api/code (Pairing Code)
+Route::match(['post'], '/code', [DeviceController::class, 'code']);
+
+// GET/POST /api/logout (Logout device session)
+Route::match(['post'], '/logout', [DeviceController::class, 'logout']);
+
+
 
 /*
 |--------------------------------------------------------------------------

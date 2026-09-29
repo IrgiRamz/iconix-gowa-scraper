@@ -702,5 +702,124 @@ class GoWaApiService
             ];
         }
     }
+
+    /**
+     * Dapatkan pairing code (login with code) dari GoWA.
+     *
+     * Endpoint GoWA: POST /devices/{device_id}/login/code?phone={phone}
+     *
+     * @param  string  $deviceId
+     * @param  string  $phone
+     * @return array{results: array|null, error: string|null, httpStatus: int, rawBody: array|null}
+     */
+    public function getPairingCode(string $deviceId, string $phone): array
+    {
+        $url = "{$this->baseUrl}/devices/{$deviceId}/login/code";
+
+        Log::info("[GoWaApiService] POST {$url} with phone={$phone}");
+
+        try {
+            $response = $this->clientJson()
+                ->post($url . '?phone=' . urlencode($phone), [
+                    'phone' => $phone,
+                ]);
+
+            $rawBody = $response->json();
+
+            Log::info("[GoWaApiService] Pairing code response: " . json_encode($rawBody));
+
+            if (! $response->successful()) {
+                $message = $rawBody['message'] ?? 'Pairing code generation failed';
+
+                return [
+                    'results' => null,
+                    'error' => $message,
+                    'httpStatus' => $response->status(),
+                    'rawBody' => $rawBody,
+                ];
+            }
+
+            return [
+                'results' => $rawBody['results'] ?? null,
+                'error' => null,
+                'httpStatus' => $response->status(),
+                'rawBody' => $rawBody,
+            ];
+        } catch (RequestException $e) {
+            Log::error("[GoWaApiService] Connection error pairing code {$deviceId}: " . $e->getMessage());
+
+            return [
+                'results' => null,
+                'error' => 'connection_error',
+                'httpStatus' => 0,
+                'exception' => $e->getMessage(),
+                'rawBody' => null,
+            ];
+        }
+    }
+
+    /**
+     * Logout device session dari GoWA.
+     *
+     * Endpoint GoWA: POST /devices/{device_id}/logout
+     *
+     * @param  string  $deviceId
+     * @return array{success: bool, message: string|null, error: string|null, httpStatus: int, rawBody: array|null}
+     */
+    public function logoutDevice(string $deviceId): array
+    {
+        $url = "{$this->baseUrl}/devices/{$deviceId}/logout";
+
+        Log::info("[GoWaApiService] POST {$url}");
+
+        try {
+            $response = $this->clientJson()->post($url);
+            $rawBody = $response->json();
+
+            Log::info("[GoWaApiService] Logout device raw response: " . json_encode($rawBody));
+
+            if (! $response->successful()) {
+                $message = $rawBody['message'] ?? 'Logout failed';
+
+                if (str_contains(strtolower($message), 'not found')) {
+                    return [
+                        'success' => false,
+                        'message' => null,
+                        'error' => 'not_found',
+                        'httpStatus' => $response->status(),
+                        'rawBody' => $rawBody,
+                    ];
+                }
+
+                return [
+                    'success' => false,
+                    'message' => null,
+                    'error' => $message,
+                    'httpStatus' => $response->status(),
+                    'rawBody' => $rawBody,
+                ];
+            }
+
+            return [
+                'success' => true,
+                'message' => $rawBody['message'] ?? 'Logout requested',
+                'error' => null,
+                'httpStatus' => $response->status(),
+                'rawBody' => $rawBody,
+            ];
+        } catch (RequestException $e) {
+            Log::error("[GoWaApiService] Connection error logout device {$deviceId}: " . $e->getMessage());
+
+            return [
+                'success' => false,
+                'message' => null,
+                'error' => 'connection_error',
+                'httpStatus' => 0,
+                'exception' => $e->getMessage(),
+                'rawBody' => null,
+            ];
+        }
+    }
 }
+
 

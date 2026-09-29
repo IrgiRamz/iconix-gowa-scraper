@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Helpers\PhoneNormalizer;
 use App\Helpers\QrFallbackGenerator;
 use App\Http\Requests\DeviceStatusRequest;
 use App\Services\GoWaApiService;
@@ -417,5 +418,115 @@ class DeviceController extends Controller
             'data' => [],
         ], 200);
     }
+
+    /**
+     * POST/GET /api/code
+     *
+     * Login pairing code untuk device WhatsApp (tanpa token auth).
+     * Normalisasi nomor telepon otomatis (cth: 08123456789 -> 628123456789).
+     */
+    public function code(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $deviceId = trim($request->input('device_id') ?? '');
+        $rawPhone = trim($request->input('phone') ?? $request->input('number') ?? '');
+
+        Log::info("[DeviceController] code called with device_id={$deviceId}, phone={$rawPhone}");
+
+        if (empty($deviceId)) {
+            return response()->json([
+                'status' => false,
+                'message' => 'device_id is required',
+                'data' => [],
+            ], 200);
+        }
+
+        if (empty($rawPhone)) {
+            return response()->json([
+                'status' => false,
+                'message' => 'phone number is required',
+                'data' => [],
+            ], 200);
+        }
+
+        $normalizedPhone = PhoneNormalizer::normalize($rawPhone);
+
+        if (empty($normalizedPhone)) {
+            return response()->json([
+                'status' => false,
+                'message' => 'invalid phone number format',
+                'data' => [],
+            ], 200);
+        }
+
+        $result = $this->gowa->getPairingCode($deviceId, $normalizedPhone);
+
+        if ($result['error']) {
+            Log::warning("[DeviceController] code error for device {$deviceId}: " . $result['error']);
+
+            return response()->json([
+                'status' => false,
+                'message' => $result['error'] === 'connection_error'
+                    ? 'connection error to gowa server'
+                    : $result['error'],
+                'data' => [],
+            ], 200);
+        }
+
+        $results = $result['results'] ?? [];
+
+        return response()->json([
+            'status' => true,
+            'message' => 'Login with code started',
+            'data' => [
+                'device_id' => $results['device_id'] ?? $deviceId,
+                'pair_code' => $results['pair_code'] ?? null,
+            ],
+        ], 200);
+    }
+
+    /**
+     * POST/GET /api/logout
+     *
+     * Logout session device dari GoWA.
+     */
+    public function logout(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $deviceId = trim($request->input('device_id') ?? '');
+
+        Log::info("[DeviceController] logout called with device_id={$deviceId}");
+
+        $token = $request->input('token');
+
+        if ($token !== '1c0n1x@S3cur3!') {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        if (empty($deviceId)) {
+            return response()->json([
+                'status' => false,
+                'message' => 'device not connected or not found',
+                'data' => [],
+            ], 200);
+        }
+
+        $result = $this->gowa->logoutDevice($deviceId);
+
+        if (!$result['success']) {
+            Log::warning("[DeviceController] logout error for device {$deviceId}: " . ($result['error'] ?? 'failed'));
+
+            return response()->json([
+                'status' => false,
+                'message' => 'device not connected or not found',
+                'data' => [],
+            ], 200);
+        }
+
+        return response()->json([
+            'status' => true,
+            'message' => $result['message'] ?? 'Logout requested',
+            'data' => [],
+        ], 200);
+    }
 }
+
 

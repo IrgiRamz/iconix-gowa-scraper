@@ -394,6 +394,137 @@
                     }
                 }
             },
+            "/code": {
+                "post": {
+                    "tags": ["Device Management"],
+                    "summary": "Pairing Code (Login with Code)",
+                    "description": "Menggenerasi kode 8-digit pairing (Login with Code) untuk dimasukkan ke dalam aplikasi WhatsApp seluler.\n- **Autentikasi**: Publik (tanpa token auth).\n- **Normalisasi**: Nomor telepon otomatis dinormalisasi (`08123456789` -> `628123456789`).",
+                    "operationId": "getPairingCodePost",
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/x-www-form-urlencoded": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": ["device_id", "phone"],
+                                    "properties": {
+                                        "device_id": { "type": "string", "example": "xxx", "description": "ID Device WhatsApp" },
+                                        "phone": { "type": "string", "example": "628123456789", "description": "Nomor WhatsApp untuk pairing" }
+                                    }
+                                }
+                            },
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": ["device_id", "phone"],
+                                    "properties": {
+                                        "device_id": { "type": "string", "example": "xxx" },
+                                        "phone": { "type": "string", "example": "628123456789" }
+                                    }
+                                },
+                                "example": {
+                                    "device_id": "xxx",
+                                    "phone": "628123456789"
+                                }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": {
+                            "description": "Response Pairing Code",
+                            "content": {
+                                "application/json": {
+                                    "examples": {
+                                        "Success": {
+                                            "summary": "Berhasil Mendapatkan Pairing Code",
+                                            "value": {
+                                                "status": true,
+                                                "message": "Login with code started",
+                                                "data": {
+                                                    "device_id": "xxx",
+                                                    "pair_code": "FJW9-W93W"
+                                                }
+                                            }
+                                        },
+                                        "Error": {
+                                            "summary": "Gagal / Device Not Found",
+                                            "value": {
+                                                "status": false,
+                                                "message": "device not connected or not found",
+                                                "data": []
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "/logout": {
+                "post": {
+                    "tags": ["Device Management"],
+                    "summary": "Logout Device Session",
+                    "description": "Melakukan logout sesi WhatsApp dari device tanpa menghapus slot device di server GoWA.\n- **Autentikasi**: Wajib menyertakan `device_id` valid.",
+                    "operationId": "logoutDevicePost",
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/x-www-form-urlencoded": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": ["device_id"],
+                                    "properties": {
+                                        "device_id": { "type": "string", "example": "xxx" },
+                                        "token": { "type": "string", "example": "xxx" }
+                                    }
+                                }
+                            },
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": ["device_id"],
+                                    "properties": {
+                                        "device_id": { "type": "string", "example": "xxx" },
+                                        "token": { "type": "string", "example": "xxx" }
+                                    }
+                                },
+                                "example": {
+                                    "device_id": "xxx"
+                                }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": {
+                            "description": "Response Logout Device",
+                            "content": {
+                                "application/json": {
+                                    "examples": {
+                                        "Success": {
+                                            "summary": "Berhasil Logout",
+                                            "value": {
+                                                "status": true,
+                                                "message": "Logout requested",
+                                                "data": []
+                                            }
+                                        },
+                                        "Error": {
+                                            "summary": "Gagal / Device Not Found",
+                                            "value": {
+                                                "status": false,
+                                                "message": "device not connected or not found",
+                                                "data": []
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+
 
             "/send": {
                 "post": {
