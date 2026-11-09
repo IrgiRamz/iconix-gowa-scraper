@@ -39,6 +39,10 @@
                 "description": "Endpoint untuk pemeriksaan status koneksi device, relog, dan pengambilan QR Code."
             },
             {
+                "name": "Passkey",
+                "description": "Endpoint jembatan Passkey WhatsApp. Challenge dibaca lewat polling `/passkey` (pengganti websocket GoWA), lalu assertion WebAuthn yang sudah ditandatangani dikirim ke `/passkey/response`. Jika status menjadi `awaiting_confirmation`, tampilkan `code` ke user lalu panggil `/passkey/confirm`. Wrapper bersifat stateless dan tidak menyimpan challenge/assertion."
+            },
+            {
                 "name": "Message Sending",
                 "description": "Endpoint untuk pengiriman pesan WhatsApp (Teks, Gambar, dan Dokumen PDF)."
             },
@@ -523,6 +527,239 @@
                                     }
                                 }
                             }
+                        }
+                    }
+                }
+            },
+
+            "/passkey": {
+                "post": {
+                    "tags": ["Passkey"],
+                    "summary": "Cek Status Passkey Pairing",
+                    "description": "Membaca status passkey pairing dari GoWA. Lakukan polling tiap 2-3 detik.\n- **status**: `none` (tidak ada proses), `awaiting_response` (challenge menunggu assertion), `awaiting_confirmation` (menunggu konfirmasi kode).\n- **challenge**: opsi WebAuthn (`PublicKeyCredentialRequestOptions`), terisi saat `awaiting_response`.\n- **code**: kode konfirmasi, terisi saat `awaiting_confirmation`.\n- **Autentikasi**: Wajib menyertakan `token`.\n- Mendukung juga metode GET dengan query string yang sama.",
+                    "operationId": "passkeyStatusPost",
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/x-www-form-urlencoded": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": ["device_id", "token"],
+                                    "properties": {
+                                        "device_id": { "type": "string", "example": "xxx" },
+                                        "token": { "type": "string", "example": "xxx" }
+                                    }
+                                }
+                            },
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": ["device_id", "token"],
+                                    "properties": {
+                                        "device_id": { "type": "string", "example": "xxx" },
+                                        "token": { "type": "string", "example": "xxx" }
+                                    }
+                                },
+                                "example": { "device_id": "xxx", "token": "xxx" }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": {
+                            "description": "Response Status Passkey",
+                            "content": {
+                                "application/json": {
+                                    "examples": {
+                                        "None": {
+                                            "summary": "Tidak ada proses passkey",
+                                            "value": {
+                                                "status": true,
+                                                "message": "success get passkey status",
+                                                "data": {
+                                                    "device_id": "xxx",
+                                                    "status": "none",
+                                                    "challenge": null,
+                                                    "code": null,
+                                                    "skip_handoff_ux": false
+                                                }
+                                            }
+                                        },
+                                        "AwaitingResponse": {
+                                            "summary": "Menunggu assertion",
+                                            "value": {
+                                                "status": true,
+                                                "message": "success get passkey status",
+                                                "data": {
+                                                    "device_id": "xxx",
+                                                    "status": "awaiting_response",
+                                                    "challenge": {
+                                                        "challenge": "dGVzdC1jaGFsbGVuZ2U",
+                                                        "timeout": 60000,
+                                                        "rpId": "whatsapp.com",
+                                                        "allowCredentials": [
+                                                            { "id": "XcnXe2W9me1XZTGii6JI9A", "type": "public-key", "transports": ["internal"] }
+                                                        ],
+                                                        "userVerification": "required"
+                                                    },
+                                                    "code": null,
+                                                    "skip_handoff_ux": false
+                                                }
+                                            }
+                                        },
+                                        "AwaitingConfirmation": {
+                                            "summary": "Menunggu konfirmasi kode",
+                                            "value": {
+                                                "status": true,
+                                                "message": "success get passkey status",
+                                                "data": {
+                                                    "device_id": "xxx",
+                                                    "status": "awaiting_confirmation",
+                                                    "challenge": null,
+                                                    "code": "ABCD-EFGH",
+                                                    "skip_handoff_ux": false
+                                                }
+                                            }
+                                        },
+                                        "Error": {
+                                            "summary": "Gagal",
+                                            "value": { "status": false, "message": "device_id is required", "data": [] }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "401": {
+                            "description": "Token tidak valid",
+                            "content": { "application/json": { "example": { "message": "Unauthorized" } } }
+                        }
+                    }
+                }
+            },
+            "/passkey/response": {
+                "post": {
+                    "tags": ["Passkey"],
+                    "summary": "Kirim Assertion WebAuthn",
+                    "description": "Meneruskan assertion WebAuthn (format `PublicKeyCredential.toJSON()`, field biner base64url tanpa padding) ke GoWA. Jika dikirim dalam jendela handoff 5 menit, pairing otomatis terkonfirmasi; jika tidak, status berubah menjadi `awaiting_confirmation` dan perlu `/passkey/confirm`.\n- **Autentikasi**: Wajib menyertakan `token`.\n- Wrapper hanya memvalidasi bentuk payload; verifikasi tanda tangan dilakukan oleh GoWA.",
+                    "operationId": "passkeyResponsePost",
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": ["device_id", "token", "id", "rawId", "type", "response"],
+                                    "properties": {
+                                        "device_id": { "type": "string", "example": "xxx" },
+                                        "token": { "type": "string", "example": "xxx" },
+                                        "id": { "type": "string", "example": "XcnXe2W9me1XZTGii6JI9A" },
+                                        "rawId": { "type": "string", "example": "XcnXe2W9me1XZTGii6JI9A" },
+                                        "type": { "type": "string", "enum": ["public-key"], "example": "public-key" },
+                                        "response": {
+                                            "type": "object",
+                                            "required": ["clientDataJSON", "authenticatorData", "signature"],
+                                            "properties": {
+                                                "clientDataJSON": { "type": "string" },
+                                                "authenticatorData": { "type": "string" },
+                                                "signature": { "type": "string" },
+                                                "userHandle": { "type": "string", "nullable": true }
+                                            }
+                                        }
+                                    }
+                                },
+                                "example": {
+                                    "device_id": "xxx",
+                                    "token": "xxx",
+                                    "id": "XcnXe2W9me1XZTGii6JI9A",
+                                    "rawId": "XcnXe2W9me1XZTGii6JI9A",
+                                    "type": "public-key",
+                                    "response": {
+                                        "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0Ii4uLn0",
+                                        "authenticatorData": "SZYN5YgOjGh0NBcPZHZgW4_krrmihjLHmVzzuoMdl2M",
+                                        "signature": "MEUCIQ...",
+                                        "userHandle": null
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": {
+                            "description": "Response Kirim Assertion",
+                            "content": {
+                                "application/json": {
+                                    "examples": {
+                                        "Success": {
+                                            "summary": "Assertion diterima",
+                                            "value": { "status": true, "message": "passkey response submitted", "data": [] }
+                                        },
+                                        "Error": {
+                                            "summary": "Gagal / Payload tidak valid",
+                                            "value": { "status": false, "message": "The response.signature field is required.", "data": [] }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "401": {
+                            "description": "Token tidak valid",
+                            "content": { "application/json": { "example": { "message": "Unauthorized" } } }
+                        }
+                    }
+                }
+            },
+            "/passkey/confirm": {
+                "post": {
+                    "tags": ["Passkey"],
+                    "summary": "Konfirmasi Kode Pairing Passkey",
+                    "description": "Mengonfirmasi bahwa kode dari status `awaiting_confirmation` sudah ditampilkan ke user dan cocok dengan kode di ponsel. Hanya diperlukan saat `skip_handoff_ux` bernilai `false`.\n- **Autentikasi**: Wajib menyertakan `token`.",
+                    "operationId": "passkeyConfirmPost",
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/x-www-form-urlencoded": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": ["device_id", "token"],
+                                    "properties": {
+                                        "device_id": { "type": "string", "example": "xxx" },
+                                        "token": { "type": "string", "example": "xxx" }
+                                    }
+                                }
+                            },
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": ["device_id", "token"],
+                                    "properties": {
+                                        "device_id": { "type": "string", "example": "xxx" },
+                                        "token": { "type": "string", "example": "xxx" }
+                                    }
+                                },
+                                "example": { "device_id": "xxx", "token": "xxx" }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": {
+                            "description": "Response Konfirmasi Passkey",
+                            "content": {
+                                "application/json": {
+                                    "examples": {
+                                        "Success": {
+                                            "summary": "Berhasil dikonfirmasi",
+                                            "value": { "status": true, "message": "passkey confirmed", "data": [] }
+                                        },
+                                        "Error": {
+                                            "summary": "Gagal",
+                                            "value": { "status": false, "message": "device_id is required", "data": [] }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "401": {
+                            "description": "Token tidak valid",
+                            "content": { "application/json": { "example": { "message": "Unauthorized" } } }
                         }
                     }
                 }

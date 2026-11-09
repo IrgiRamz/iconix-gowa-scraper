@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\DeviceController;
 use App\Http\Controllers\MessageController;
+use App\Http\Controllers\PasskeyController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -46,6 +47,20 @@ Route::match(['post'], '/code', [DeviceController::class, 'code']);
 // GET/POST /api/logout (Logout device session)
 Route::match(['post'], '/logout', [DeviceController::class, 'logout']);
 
+/*
+|--------------------------------------------------------------------------
+| Passkey WhatsApp Endpoints
+|--------------------------------------------------------------------------
+*/
+
+// GET/POST /api/passkey (cek status / challenge / kode konfirmasi)
+Route::match(['get', 'post'], '/passkey', [PasskeyController::class, 'status']);
+
+// POST /api/passkey/response (kirim assertion WebAuthn)
+Route::post('/passkey/response', [PasskeyController::class, 'response']);
+
+// POST /api/passkey/confirm (konfirmasi kode pairing)
+Route::post('/passkey/confirm', [PasskeyController::class, 'confirm']);
 
 
 /*

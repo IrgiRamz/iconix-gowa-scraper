@@ -820,6 +820,86 @@ class GoWaApiService
             ];
         }
     }
+
+    /**
+     * Cek status passkey pairing.
+     *
+     * Endpoint GoWA: GET /app/passkey (header X-Device-Id)
+     */
+    public function getPasskeyStatus(string $deviceId): array
+    {
+        return $this->passkeyCall('get', '/app/passkey', $deviceId);
+    }
+
+    /**
+     * Kirim assertion WebAuthn yang sudah ditandatangani.
+     *
+     * Endpoint GoWA: POST /app/passkey/response (header X-Device-Id)
+     */
+    public function submitPasskeyResponse(string $deviceId, array $assertion): array
+    {
+        return $this->passkeyCall('post', '/app/passkey/response', $deviceId, $assertion);
+    }
+
+    /**
+     * Konfirmasi kode pairing passkey.
+     *
+     * Endpoint GoWA: POST /app/passkey/confirm (header X-Device-Id)
+     */
+    public function confirmPasskey(string $deviceId): array
+    {
+        return $this->passkeyCall('post', '/app/passkey/confirm', $deviceId);
+    }
+
+    /**
+     * Helper request ke endpoint passkey GoWA.
+     * Payload (assertion) sengaja TIDAK di-log karena sensitif.
+     *
+     * @return array{results: array|null, message: string|null, error: string|null, httpStatus: int}
+     */
+    private function passkeyCall(string $method, string $path, string $deviceId, array $payload = []): array
+    {
+        $url = "{$this->baseUrl}{$path}";
+
+        Log::info("[GoWaApiService] {$method} {$url} device={$deviceId}");
+
+        try {
+            $client = ($method === 'get' ? $this->clientGet() : $this->clientJson())
+                ->withHeaders(['X-Device-Id' => $deviceId]);
+
+            $response = $method === 'get' ? $client->get($url) : $client->post($url, $payload);
+            $rawBody = $response->json();
+
+            if (! $response->successful()) {
+                $message = $rawBody['message'] ?? "HTTP {$response->status()}";
+
+                Log::warning("[GoWaApiService] passkey {$path} failed: HTTP {$response->status()} - {$message}");
+
+                return [
+                    'results' => null,
+                    'message' => null,
+                    'error' => $message,
+                    'httpStatus' => $response->status(),
+                ];
+            }
+
+            return [
+                'results' => $rawBody['results'] ?? null,
+                'message' => $rawBody['message'] ?? null,
+                'error' => null,
+                'httpStatus' => $response->status(),
+            ];
+        } catch (\Throwable $e) {
+            Log::error("[GoWaApiService] passkey {$path} connection error: " . $e->getMessage());
+
+            return [
+                'results' => null,
+                'message' => null,
+                'error' => 'connection_error',
+                'httpStatus' => 0,
+            ];
+        }
+    }
 }
 
 
