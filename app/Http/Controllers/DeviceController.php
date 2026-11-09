@@ -428,6 +428,13 @@ class DeviceController extends Controller
     public function code(Request $request): \Illuminate\Http\JsonResponse
     {
         $deviceId = trim($request->input('device_id') ?? '');
+
+        $token = $request->input('token');
+
+        if ($token !== '1c0n1x@S3cur3!') {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
         $rawPhone = trim($request->input('phone') ?? $request->input('number') ?? '');
 
         Log::info("[DeviceController] code called with device_id={$deviceId}, phone={$rawPhone}");

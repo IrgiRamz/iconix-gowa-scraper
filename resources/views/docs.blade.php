@@ -406,25 +406,28 @@
                             "application/x-www-form-urlencoded": {
                                 "schema": {
                                     "type": "object",
-                                    "required": ["device_id", "phone"],
+                                    "required": ["device_id", "phone", "token"],
                                     "properties": {
                                         "device_id": { "type": "string", "example": "xxx", "description": "ID Device WhatsApp" },
-                                        "phone": { "type": "string", "example": "628123456789", "description": "Nomor WhatsApp untuk pairing" }
+                                        "phone": { "type": "string", "example": "628123456789", "description": "Nomor WhatsApp untuk pairing" },
+                                        "token": { "type": "string", "example": "xxx" }
                                     }
                                 }
                             },
                             "application/json": {
                                 "schema": {
                                     "type": "object",
-                                    "required": ["device_id", "phone"],
+                                    "required": ["device_id", "phone", "token"],
                                     "properties": {
                                         "device_id": { "type": "string", "example": "xxx" },
-                                        "phone": { "type": "string", "example": "628123456789" }
+                                        "phone": { "type": "string", "example": "628123456789" },
+                                        "token": { "type": "string", "example": "xxx" }      
                                     }
                                 },
                                 "example": {
                                     "device_id": "xxx",
-                                    "phone": "628123456789"
+                                    "phone": "628123456789",
+                                    "token": "xxx"      
                                 }
                             }
                         }
